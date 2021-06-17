@@ -1,0 +1,121 @@
+---
+title: "ML_Project"
+author: "Syeda Rukhsana Ashrafi"
+date: "6/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Introduction:
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+Data:
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+I have downloaded the two datasets
+```{r}
+csv <- function(url, nastrings) {
+  temp <- tempfile()
+  download.file(url, temp, method = "curl")
+  data <- read.csv(temp, na.strings = nastrings)
+  unlink(temp)
+  return(data)
+}
+
+trainlink <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+train <- csv(trainlink, c("", "NA", "#DIV/0!"))
+
+testlink <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test <- csv(testlink, c("", "NA", "#DIV/0!"))
+```
+In the training data, we have 19622 observations and 160 features, and the distribution of the five measured stances A,B,C,D,E is:
+```{r}
+dim(train)
+
+table(train$classe)
+```
+Preprocessing:
+To preprocess the data, first we partition the training set, then We separate our training data into a training set and a validation set in order to validate our model.
+```{r}
+library(caret)
+
+set.seed(123456)
+trainset <- createDataPartition(train$classe, p = 0.8, list = FALSE)
+Training <- train[trainset, ]
+Validation <- train[-trainset, ]
+```
+Feature selection:
+To select the feature, first we clean up near zero variance features, columns with missing values and descriptive fields as seen in the lecture video.
+```{r}
+# exclude near zero variance features
+nzvarcol <- nearZeroVar(Training)
+Training <- Training[, -nzvarcol]
+
+# exclude columns with 30% or more missing values exclude descriptive
+cntlength <- sapply(Training, function(x) {
+  sum(!(is.na(x) | x == ""))
+})
+nullcol <- names(cntlength[cntlength < 0.7 * length(Training$classe)])
+descriptcol <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", 
+                 "cvtd_timestamp", "new_window", "num_window")
+excludecols <- c(descriptcol, nullcol)
+Training <- Training[, !names(Training) %in% excludecols]
+```
+Model Train:
+Now We will use random forest model which can implement by the randomForest package for classification and regression.
+```{r}
+library(randomForest)
+
+#randomForest 4.6-7
+## Type rfNews() to see new features/changes/bug fixes.
+rfModel <- randomForest(as.factor(classe) ~ ., data = 
+Training, importance = TRUE, ntrees = 10)
+```
+Model Validation:
+Now we will test our model performance on the training set itself and the cross validation set.
+
+Training set accuracy:
+```{r}
+perftraining <- predict(rfModel, Training)
+print(confusionMatrix(perftraining,as.factor(Training$classe)))
+```
+Since the cross validation accuracy is almost 100% and the out-of-sample error is then near 0% so our model performance is good.
+
+Test set prediction:
+The prediction of our algorithm for the test set is:
+```{r}
+perfvalidation <- predict(rfModel, Validation)
+print(confusionMatrix(perfvalidation, as.factor(Validation$classe)))
+
+ptest <- predict(rfModel, test)
+ptest
+```
+Finally we save the output to files according to instructions and post it to the submission page.
+```{r}
+answer <- as.vector(ptest)
+
+pml_write_files = function(x) {
+  n = length(x)
+  for (i in 1:n) {
+    filename = paste0("problem_id_", i, ".txt")
+    write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+                col.names = FALSE)
+  }
+}
+
+pml_write_files(answer)
+answer
+
+```
+
+
